@@ -1,15 +1,31 @@
 package com.github.senicko.lox;
 
+import java.util.ArrayList;
 import java.util.List;
 
 /*
+program    -> statement* EOF
+
+statement  -> exprStmt | printStmt
+
+exprStmt   -> expression ";"
+
+printStmt  -> "print" expression ";"
+
 expression -> equality
+
 ternary    -> equality "?" expression ":" expression
+
 equality   -> comparison (( "!=" | "==" ) comparison)*
+
 comparison -> term (( ">" | ">=" | "<" | "<=") term)*
+
 term       -> factor (( "-" | "+" ) factor)*
+
 factor     -> unary (( "/" | "*" ) unary)*
+
 unary      -> ( "!" | "-" ) unary | primary
+
 primary    -> NUMBER | STRING | "true" | "false" | "nil" | "(" expression ")"
 */
 
@@ -24,16 +40,35 @@ public class Parser {
         this.tokens = tokens;
     }
 
-    Expr parse() {
-        try {
-            return expression();
-        } catch (ParseError error) {
-            return null;
+    List<Stmt> parse() {
+        List <Stmt> statements = new ArrayList<>();
+
+        while (!isAtEnd()) {
+            statements.add(statement());
         }
+
+        return statements;
     }
 
     private Expr expression() {
         return ternary();
+    }
+
+    private Stmt statement() {
+        if (match(TokenType.PRINT)) return printStatement();
+        return expressionStatement();
+    }
+
+    private Stmt printStatement() {
+        Expr value = expression();
+        consume(TokenType.SEMICOLON, "Expect ';' after value.");
+        return new Stmt.Print(value);
+    }
+
+    private Stmt expressionStatement() {
+        Expr expr = expression();
+        consume(TokenType.SEMICOLON, "Expect ';' after expression.");
+        return new Stmt.Expression(expr);
     }
 
     private Expr ternary() {
@@ -141,8 +176,12 @@ public class Parser {
         return false;
     }
 
-    private Token consume(TokenType type, String message) {
-        if (check(type)) return advance();
+    private void consume(TokenType type, String message) {
+        if (check(type)) {
+            advance();
+            return;
+        }
+
         throw error(peek(), message);
     }
 
