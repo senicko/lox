@@ -41,8 +41,18 @@ public class Main {
         while (true) {
             System.out.print("> ");
             String line = reader.readLine();
+
             if (line == null) break;
-            run(line);
+
+            // FIXME: This is a hacky solution but it works for now.
+            if (line.charAt(line.length() - 1) != ';') line += ';';
+
+            try {
+                run(line);
+            } catch (RuntimeException exception) {
+                System.out.println(exception);
+            }
+
             hadError = false;
         }
     }
@@ -51,24 +61,29 @@ public class Main {
         Scanner scanner = new Scanner(source);
         List<Token> tokens = scanner.scanTokens();
 
+//        for (Token token : tokens) {
+//            System.out.println(token.toString());
+//        }
+
         Parser parser = new Parser(tokens);
         List<Stmt> expression = parser.parse();
 
         if (hadError) return;
 
+//        new AstPrinter().print(expression.get(0));
         interpreter.interpret(expression);
     }
 
     static void error(Token token, String message) {
-        if (token.type == TokenType.EOF) {
-            report(token.line, " at end", message);
+        if (token.type() == TokenType.EOF) {
+            report(token.line(), " at end", message);
         } else {
-            report(token.line, " at '" + token.lexeme + "'", message);
+            report(token.line(), " at '" + token.lexeme() + "'", message);
         }
     }
 
     static void runtimeError(LoxRuntimeError error) {
-        System.out.println(error.getMessage() + "\n [line " + error.token.line + "]");
+        System.out.println(error.getMessage() + "\n [line " + error.token.line() + "]");
         hadRuntimeError = true;
     }
 

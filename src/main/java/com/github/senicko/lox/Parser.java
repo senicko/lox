@@ -4,15 +4,23 @@ import java.util.ArrayList;
 import java.util.List;
 
 /*
-program    -> statement* EOF
+program    -> declaration* EOF
 
-statement  -> exprStmt | printStmt
+declaration -> varDecl | statement
+
+varDecl    -> "var" IDENTIFIER ("=" expression)? ";"
+
+statement  -> exprStmt | printStmt | block
+
+block -> "{" declaration* "}"
 
 exprStmt   -> expression ";"
 
 printStmt  -> "print" expression ";"
 
-expression -> equality
+expression -> assignment
+
+assignment -> IDENTIFIER "=" assignment | equality
 
 ternary    -> equality "?" expression ":" expression
 
@@ -26,7 +34,7 @@ factor     -> unary (( "/" | "*" ) unary)*
 
 unary      -> ( "!" | "-" ) unary | primary
 
-primary    -> NUMBER | STRING | "true" | "false" | "nil" | "(" expression ")"
+primary    -> NUMBER | STRING | "true" | "false" | "nil" | "(" expression ")" | IDENTIFIER
 */
 
 public class Parser {
@@ -44,18 +52,26 @@ public class Parser {
         List <Stmt> statements = new ArrayList<>();
 
         while (!isAtEnd()) {
-            statements.add(statement());
+            statements.add(declaration());
         }
 
         return statements;
     }
 
-    private Expr expression() {
-        return ternary();
+    private Stmt declaration() {
+        try {
+            if(match(TokenType.VAR)) return varDeclaration();
+            return statement();
+        } catch (ParseError error) {
+            synchronize();
+            return null;
+        }
     }
 
     private Stmt statement() {
         if (match(TokenType.PRINT)) return printStatement();
+        if (match(TokenType.LEFT_BRACE)) return new Stmt.Block(block());
+
         return expressionStatement();
     }
 
@@ -65,10 +81,55 @@ public class Parser {
         return new Stmt.Print(value);
     }
 
+    private Stmt varDeclaration() {
+        Token name = consume(TokenType.IDENTIFIER, "Expect variable name.");
+
+        Expr initializer = null;
+        if(match(TokenType.EQUAL)) {
+            initializer = expression();
+        }
+
+        consume(TokenType.SEMICOLON, "Expect ';' after variable declaration");
+        return new Stmt.Var(name, initializer);
+    }
+
     private Stmt expressionStatement() {
         Expr expr = expression();
         consume(TokenType.SEMICOLON, "Expect ';' after expression.");
         return new Stmt.Expression(expr);
+    }
+
+    private List<Stmt> block() {
+        List<Stmt> statements = new ArrayList<>();
+
+        while(!check(TokenType.RIGHT_BRACE) && !isAtEnd()) {
+            statements.add(declaration());
+        }
+
+        consume(TokenType.RIGHT_BRACE, "Expect '}' after block.");
+        return statements;
+    }
+
+    private Expr expression() {
+        return assignment();
+    }
+
+    private Expr assignment() {
+        Expr expr = ternary();
+
+        if(match(TokenType.EQUAL)) {
+            Token target = previous();
+            Expr value = assignment();
+
+            if(expr instanceof Expr.Variable var) {
+                Token name = var.name;
+                return new Expr.Assignment(name, value);
+            }
+
+            error(target, "Invalid assignment target");
+        }
+
+        return expr;
     }
 
     private Expr ternary() {
@@ -107,7 +168,7 @@ public class Parser {
     private Expr comparison() {
         Expr expr = term();
 
-        while (match(TokenType.GREATER, TokenType.GREATER_EQUAL, TokenType.LESS, TokenType.LESS_EQUAL)) {
+        while (match(TokenType.GREATER, TokenType.GREATER_EQUAL, TokenType.LESS, TokenType.LESS_EQUAL, TokenType.SPACESHIP)) {
             Token operator = previous();
             Expr right = term();
             expr = new Expr.Binary(expr, operator, right);
@@ -154,7 +215,8 @@ public class Parser {
         if (match(TokenType.FALSE)) return new Expr.Literal(false);
         if (match(TokenType.TRUE)) return new Expr.Literal(true);
         if (match(TokenType.NIL)) return new Expr.Literal(null);
-        if (match(TokenType.NUMBER, TokenType.STRING)) return new Expr.Literal(previous().literal);
+        if (match(TokenType.NUMBER, TokenType.STRING)) return new Expr.Literal(previous().literal());
+        if(match(TokenType.IDENTIFIER)) return new Expr.Variable(previous());
 
         if (match(TokenType.LEFT_PAREN)) {
             Expr expr = expression();
@@ -176,10 +238,9 @@ public class Parser {
         return false;
     }
 
-    private void consume(TokenType type, String message) {
+    private Token consume(TokenType type, String message) {
         if (check(type)) {
-            advance();
-            return;
+            return advance();
         }
 
         throw error(peek(), message);
@@ -194,9 +255,9 @@ public class Parser {
         advance();
 
         while (!isAtEnd()) {
-            if (previous().type == TokenType.SEMICOLON) return;
+            if (previous().type() == TokenType.SEMICOLON) return;
 
-            switch (peek().type) {
+            switch (peek().type()) {
                 case CLASS:
                 case FUN:
                 case VAR:
@@ -214,7 +275,7 @@ public class Parser {
 
     private boolean check(TokenType type) {
         if (isAtEnd()) return false;
-        return peek().type == type;
+        return peek().type() == type;
     }
 
     private Token advance() {
@@ -223,7 +284,7 @@ public class Parser {
     }
 
     private boolean isAtEnd() {
-        return peek().type == TokenType.EOF;
+        return peek().type() == TokenType.EOF;
     }
 
     private Token peek() {

@@ -15,8 +15,22 @@ public class Main {
 
         String outputDir = args[0];
 
-        defineAst(outputDir, "Expr", Arrays.asList("Binary : Expr left, Token operator, Expr right", "Grouping : Expr expression", "Literal : Object value", "Unary : Token operator, Expr right"));
-        defineAst(outputDir, "Stmt", Arrays.asList("Expression : Expr expression", "Print : Expr expression"));
+        defineAst(outputDir, "Expr", Arrays.asList(
+                "Binary : Expr left, Token operator, Expr right",
+                "Grouping : Expr expression",
+                "Literal : Object value",
+                "Unary : Token operator, Expr right",
+                "Ternary : Expr condition, Expr truthy, Expr falsy",
+                "Variable : Token name",
+                "Assignment : Token name, Expr value"
+        ));
+
+        defineAst(outputDir, "Stmt", Arrays.asList(
+                "Expression : Expr expression",
+                "Print : Expr expression",
+                "Var : Token name, Expr initializer",
+                "Block : List<Stmt> statements"
+        ));
     }
 
     public static void defineAst(String outputDir, String baseName, List<String> types) throws IOException {
@@ -40,7 +54,6 @@ public class Main {
         }
 
         // The base accept() method
-        writer.println();
         writer.println("    abstract <R> R accept(Visitor<R> visitor);");
 
         writer.println("}");
@@ -70,7 +83,7 @@ public class Main {
             writer.println("            " + "this." + name + " = " + name + ";");
         }
 
-        writer.println("    }");
+        writer.println("        }");
 
         // Visitor pattern
         writer.println();
@@ -86,5 +99,6 @@ public class Main {
         }
 
         writer.println("    }");
+        writer.println();
     }
 }

@@ -1,0 +1,14 @@
+var name = "Bob";
+print "Hello, " + name;
+
+var a = 10;
+
+{
+    var a = 50;
+    var b = 10;
+
+    print "a=" + a;
+    print "a+b=" + (a + b);
+}
+
+print "a=" + a;

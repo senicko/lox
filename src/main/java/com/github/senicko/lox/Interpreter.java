@@ -3,13 +3,14 @@ package com.github.senicko.lox;
 import java.util.List;
 
 public class Interpreter implements Expr.Visitor<Object>, Stmt.Visitor<Void> {
+    private Environment environment = new Environment();
+
     void interpret(List<Stmt> statements) {
         try {
-            for(Stmt statement : statements) {
+            for (Stmt statement : statements) {
                 execute(statement);
             }
         } catch (LoxRuntimeError error) {
-            System.out.println("test");
             Main.runtimeError(error);
         }
     }
@@ -28,9 +29,9 @@ public class Interpreter implements Expr.Visitor<Object>, Stmt.Visitor<Void> {
     public Object visitUnaryExpr(Expr.Unary expr) {
         Object right = evaluate(expr.right);
 
-        return switch (expr.operator.type) {
+        return switch (expr.operator.type()) {
             case MINUS -> {
-                checkNumberOperand(expr.operator, right);
+                assertNumberOperand(expr.operator, right);
                 yield -(double) right;
             }
             case BANG -> !isTruthy(right);
@@ -45,43 +46,62 @@ public class Interpreter implements Expr.Visitor<Object>, Stmt.Visitor<Void> {
         Object left = evaluate(expr.left);
         Object right = evaluate(expr.right);
 
-        return switch (expr.operator.type) {
+        return switch (expr.operator.type()) {
             case PLUS -> {
-                if (left instanceof Double && right instanceof Double)
-                    yield (double) left + (double) right;
+                if (left instanceof Double lh && right instanceof Double rh)
+                    yield lh + rh;
 
-                if (left instanceof String && right instanceof String)
-                    yield left + (String) right;
+                if (left instanceof String lh && right instanceof String rh)
+                    yield lh + rh;
 
-                throw new LoxRuntimeError(expr.operator, "Operands must be two numbers or two strings.");
+                if (left instanceof String lh)
+                    yield lh + this.stringify(right);
+
+                if (right instanceof String rh)
+                    yield this.stringify(left) + rh;
+
+                throw new LoxRuntimeError(expr.operator, "Operands must be either Strings or Numbers.");
             }
             case MINUS -> {
-                checkNumberOperands(expr.operator, left, right);
-                yield (double) left - (double) right;
+                assertNumberOperands(expr.operator, left, right);
+                yield (Double) left - (Double) right;
             }
             case SLASH -> {
-                checkNumberOperands(expr.operator, left, right);
-                yield (double) left / (double) right;
+                assertNumberOperands(expr.operator, left, right);
+
+                if ((Double) right == 0)
+                    throw new LoxRuntimeError(expr.operator, "Attempt to divide by zero.");
+
+                yield (Double) left / (Double) right;
             }
             case STAR -> {
-                checkNumberOperands(expr.operator, left, right);
-                yield (double) left * (double) right;
+                assertNumberOperands(expr.operator, left, right);
+                yield (Double) left * (Double) right;
             }
             case GREATER -> {
-                checkNumberOperands(expr.operator, left, right);
-                yield (double) left > (double) right;
+                assertNumberOperands(expr.operator, left, right);
+                yield (Double) left > (Double) right;
             }
             case GREATER_EQUAL -> {
-                checkNumberOperands(expr.operator, left, right);
-                yield (double) left >= (double) right;
+                assertNumberOperands(expr.operator, left, right);
+                yield (Double) left >= (Double) right;
             }
             case LESS -> {
-                checkNumberOperands(expr.operator, left, right);
-                yield (double) left < (double) right;
+                assertNumberOperands(expr.operator, left, right);
+                yield (Double) left < (Double) right;
             }
             case LESS_EQUAL -> {
-                checkNumberOperands(expr.operator, left, right);
-                yield (double) left <= (double) right;
+                assertNumberOperands(expr.operator, left, right);
+                yield (Double) left <= (Double) right;
+            }
+            case SPACESHIP -> {
+                if (left instanceof String lh && right instanceof String rh)
+                    yield lh.compareTo(rh);
+
+                if (left instanceof Double lh && right instanceof Double rh)
+                    yield lh.compareTo(rh);
+
+                throw new LoxRuntimeError(expr.operator, "Operands must be either Strings or Numbers.");
             }
             case BANG_EQUAL -> !isEqual(left, right);
             case EQUAL_EQUAL -> isEqual(left, right);
@@ -99,12 +119,24 @@ public class Interpreter implements Expr.Visitor<Object>, Stmt.Visitor<Void> {
         return evaluate(expr.falsy);
     }
 
-    private void checkNumberOperand(Token operator, Object operand) {
+    @Override
+    public Object visitVariableExpr(Expr.Variable expr) {
+        return environment.get(expr.name);
+    }
+
+    @Override
+    public Object visitAssignmentExpr(Expr.Assignment expr) {
+        Object value = evaluate(expr.value);
+        environment.assign(expr.name, value);
+        return value;
+    }
+
+    private void assertNumberOperand(Token operator, Object operand) {
         if (operand instanceof Double) return;
         throw new LoxRuntimeError(operator, "Operand must be a number.");
     }
 
-    private void checkNumberOperands(Token operator, Object left, Object right) {
+    private void assertNumberOperands(Token operator, Object left, Object right) {
         if (left instanceof Double && right instanceof Double) return;
         throw new LoxRuntimeError(operator, "Operands must be numbers.");
     }
@@ -117,6 +149,20 @@ public class Interpreter implements Expr.Visitor<Object>, Stmt.Visitor<Void> {
         stmt.accept(this);
     }
 
+    private void executeBlock(List<Stmt> statements, Environment environment) {
+        Environment previous = this.environment;
+
+        try {
+            this.environment = environment;
+
+            for(Stmt statement : statements) {
+                execute(statement);
+            }
+        } finally {
+            this.environment = previous;
+        }
+    }
+
     @Override
     public Void visitExpressionStmt(Stmt.Expression stmt) {
         evaluate(stmt.expression);
@@ -127,6 +173,24 @@ public class Interpreter implements Expr.Visitor<Object>, Stmt.Visitor<Void> {
     public Void visitPrintStmt(Stmt.Print stmt) {
         Object value = evaluate(stmt.expression);
         System.out.println(stringify(value));
+        return null;
+    }
+
+    @Override
+    public Void visitVarStmt(Stmt.Var stmt) {
+        Object value = null;
+
+        if(stmt.initializer != null) {
+            value = evaluate(stmt.initializer);
+        }
+
+        environment.define(stmt.name.lexeme(), value);
+        return null;
+    }
+
+    @Override
+    public Void visitBlockStmt(Stmt.Block stmt) {
+        executeBlock(stmt.statements, new Environment(environment));
         return null;
     }
 

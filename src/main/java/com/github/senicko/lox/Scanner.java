@@ -98,7 +98,7 @@ public class Scanner {
                 addToken(match('=') ? TokenType.EQUAL_EQUAL : TokenType.EQUAL);
                 break;
             case '<':
-                addToken(match('=') ? TokenType.LESS_EQUAL : TokenType.LESS);
+                addToken(match('=') ? (match('>') ? TokenType.SPACESHIP : TokenType.LESS_EQUAL) : TokenType.LESS);
                 break;
             case '>':
                 addToken(match('=') ? TokenType.GREATER_EQUAL : TokenType.GREATER);
@@ -146,7 +146,7 @@ public class Scanner {
         String text = source.substring(start, current);
         TokenType type = keywords.get(text);
 
-        if(type == null) type = TokenType.IDENTIFIER;
+        if (type == null) type = TokenType.IDENTIFIER;
         addToken(type);
     }
 
