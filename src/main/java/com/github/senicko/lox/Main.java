@@ -71,7 +71,12 @@ public class Main {
         if (hadError) return;
 
 //        new AstPrinter().print(expression.get(0));
-        interpreter.interpret(expression);
+
+        if(expression.size() == 1 && expression.get(0) instanceof Stmt.Expression expr) {
+            interpreter.printExpression(expr);
+        } else {
+            interpreter.interpret(expression);
+        }
     }
 
     static void error(Token token, String message) {
